@@ -1,9 +1,9 @@
 require('dotenv').config()
 const express = require('express')
 const MongoClient = require("mongodb").MongoClient;
-
 const app = express()
-const port = 3000
+const port = 80
+
 app.use(express.json());
 
 const uri = process.env.MONGO_URL;
@@ -41,9 +41,6 @@ app.post('/', async (req, res) => {
     }
 })
 
-
 app.listen(port, () => {
   console.log(`Aapp listening at http://localhost:${port}`)
 })
-
-

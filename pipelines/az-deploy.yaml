@@ -1,0 +1,195 @@
+pool:
+  name: Azure Pipelines
+
+trigger: none
+
+parameters:
+- name: applyChanges
+  displayName: Apply changes
+  type: boolean
+  default: false
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: "mateusclira-infra"
+      ref: "refs/heads/master" 
+
+stages:
+  - stage: dev
+    displayName: "Development"
+    dependsOn: []
+    variables:
+      - group: dev
+    jobs:
+    - job: azUpdate
+      displayName: "Update Azure Resources"
+      steps:
+        - template: ./templates/az-template.yaml
+          parameters:
+            serviceConnectionName: 'mateusclira'
+            applyChanges: ${{ parameters.applyChanges }}
+            terraformRgName: "rg-dev-mateusclira"
+            terraformWorkingFolder:  "./infra"
+            terraformStorageAccountName : "mateuscliradev"
+            stage: "dev"
+
+  # - stage: uat
+  #   displayName: "UAT"
+  #   dependsOn: []
+  #   variables:
+  #   - group: "nfra-infrastructure-uat"     
+  #   jobs:
+  #   - job: compliance
+  #     displayName: "compliance hub"
+  #     pool:
+  #       name: Rabo-Linux-Production
+  #     steps:
+  #     - task: SonarQubePrepare@4
+  #       displayName: 'Prepare analysis on SonarQube'        
+  #       inputs:
+  #         SonarQube: 'SACBD-SonarQube-SA - Data'
+  #         scannerMode: 'CLI'
+  #         configMode: 'manual'
+  #         cliProjectKey: 'SACBD-FINANCE-NFRA-iac'
+  #         cliProjectName: 'SACBD-FINANCE-NFRA-iac'
+  #         cliSources: '.'
+  #     # Run Code Analysis task - SonarQube #
+  #     - task: SonarQubeAnalyze@4
+  #       displayName: 'Run Code Analysis'
+  #     # Publish Quality Gate Result task - SonarQube #
+  #     - task: SonarQubePublish@4
+  #       displayName: 'Publish Quality Gate Result'
+  #    # Fortify #
+  #     - task: FortifySCA@7
+  #       inputs:
+  #         runBuildTranslate: true
+  #         applicationType: 'other'
+  #         fortifyProjects: '**\*'
+  #         fortifyBuildId: '(Build.BuildId)'
+  #         fortifyServerName: 'SACBD-Fortify-SA - Data'
+  #         fortifyApplicationName: $(Build.Repository.Name)
+  #         fortifyApplicationVersion: 1.0
+  #         runFortifyRulepackUpdate: false
+  #         runFortifyClean: true
+  #         scaVerbose: false
+  #         scaDebug: false
+  #         runFortifyScan: true
+  #         runFortifyUpload: false
+  #         fortifyScanType: 'LocalScan'
+  #     #|Publish Artifact|
+  #     - task: PublishPipelineArtifact@1
+  #       inputs:
+  #         targetPath: '$(Build.SourcesDirectory)'
+  #         artifact: 'downloaded'
+  #         publishLocation: 'pipeline'
+  #   - job: azureUpdate
+  #     timeoutInMinutes: 180
+  #     displayName: "Update Azure Resources"
+  #     dependsOn: compliance
+  #     pool:
+  #       vmImage: 'ubuntu-latest'
+  #     steps:
+  #       - template: ./templates/step-azurecli.yml
+  #         parameters:
+  #           azureSubscription: 'reg-prd-br-finance (SPN)'
+  #           scriptType: 'bash'
+  #           scriptLocation: 'inlineScript'
+  #           inlineScript: |
+  #               CURRENT_IP=`dig +short myip.opendns.com @resolver1.opendns.com`
+                
+  #               az keyvault network-rule add --name akv-uat-br-nfra --ip-address $CURRENT_IP
+                
+  #               sleep 40
+  #           displayName: 'Add IP'
+  #       - template: ./templates/step-getsecrets.yml
+  #         parameters:
+  #           azureSubscription: 'reg-prd-br-finance (SPN)'
+  #           KeyVaultName: 'akv-uat-br-nfra'
+  #       - template: templates/infrastructure-steps.yaml
+  #         parameters:
+  #           applyChanges: ${{ parameters.applyChanges }}
+  #           serviceConnectionName: "reg-prd-br-finance (SPN)"
+  #           terraformRgName: "rg-$(System.StageName)-terraform"
+  #           terraformWorkingFolder:  "./infrastructure"
+  #           terraformStorageAccountName : "satfnfra$(System.StageName)"
+  #           stage: "uat"
+  #       - template: ./templates/step-azurecli.yml
+  #         parameters:
+  #           azureSubscription: 'reg-prd-br-finance (SPN)'
+  #           scriptType: 'bash'
+  #           scriptLocation: 'inlineScript'
+  #           inlineScript: |
+  #               CURRENT_IP=`dig +short myip.opendns.com @resolver1.opendns.com`
+                
+  #               az keyvault network-rule remove --name akv-uat-br-nfra --ip-address $CURRENT_IP
+                
+  #               sleep 30
+  #           displayName: 'Remove IP'
+
+  - stage: prd
+    displayName: "Production"
+    dependsOn: dev
+    variables:
+      - group: "prd"     
+    jobs:
+    - deployment: GetApprovals
+      displayName: "Get Business Owner approval"
+      environment: 'prd'
+      strategy:
+          runOnce:
+            deploy:
+                steps:
+                - script: echo "Approved"
+    - job: azureUpdate
+      displayName: "Update Azure Resources"
+      steps:
+        # - task: SM9 - Create@2
+        #   displayName: 'SM9 - Create'
+        #   inputs:
+        #     title: '$(Build.BuildNumber)'
+        #     template: 'My Template'
+        #     assets: 'My Assets'
+        #     duration: 10
+        # - template: ./templates/step-azurecli.yml
+        #   parameters:
+        #     azureSubscription: 'mateusclira'
+        #     scriptType: 'bash'
+        #     scriptLocation: 'inlineScript'
+        #     inlineScript: |
+        #         CURRENT_IP=`dig +short myip.opendns.com @resolver1.opendns.com`
+                
+        #         az keyvault network-rule add --name x --ip-address $CURRENT_IP
+                
+        #         sleep 60
+        #     displayName: 'Add IP'
+        # - template: ./templates/step-getsecrets.yml
+        #   parameters:
+        #     azureSubscription: 'mateusclira'
+        #     KeyVaultName: 'x'   
+        #Execução do Terraform
+        - template: templates/az-template.yaml
+          parameters:
+            applyChanges: ${{ parameters.applyChanges }}
+            serviceConnectionName: "mateusclira"
+            terraformRgName: "rg-prd-mateusclira"
+            terraformWorkingFolder:  "./infra"
+            terraformStorageAccountName : "mateuscliraprd"     
+            stage: "prd"
+
+        # - template: ./templates/step-azurecli.yml
+        #   parameters:
+        #     azureSubscription: 'mateusclira'
+        #     scriptType: 'bash'
+        #     scriptLocation: 'inlineScript'
+        #     inlineScript: |
+        #         CURRENT_IP=`dig +short myip.opendns.com @resolver1.opendns.com`
+                
+        #         az keyvault network-rule remove --name x --ip-address $CURRENT_IP
+        #     displayName: 'Remove IP' 
+        # - task: SM9 - Close@2
+        #   displayName: 'SM9 - Close'
+        #   inputs:
+        #     changeClosureCode: 1
+        #     changeClosureComments: Success 

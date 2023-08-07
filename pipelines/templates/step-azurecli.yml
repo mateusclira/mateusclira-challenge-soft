@@ -1,0 +1,14 @@
+parameters:
+  azureSubscription: ''
+  scriptType: ''
+  scriptLocation: ''
+  inlineScript: ''
+  displayName: ''
+steps:  
+- task: AzureCLI@2
+  displayName: ${{parameters.displayName}}
+  inputs:
+    azureSubscription: ${{parameters.azureSubscription}}
+    scriptType: ${{parameters.scriptType}}
+    scriptLocation: ${{parameters.scriptLocation}}
+    inlineScript: ${{parameters.inlineScript}}
